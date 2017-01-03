@@ -69,37 +69,34 @@ var TWEEN = TWEEN || (function () {
 })();
 
 
-// Include a performance.now polyfill
-(function () {
-	// In node.js, use process.hrtime.
-	if (this.window === undefined && this.process !== undefined) {
-		TWEEN.now = function () {
-			var time = process.hrtime();
+// Include a performance.now polyfill.
+// In node.js, use process.hrtime.
+if (typeof (window) === 'undefined' && typeof (process) !== 'undefined') {
+	TWEEN.now = function () {
+		var time = process.hrtime();
 
-			// Convert [seconds, microseconds] to milliseconds.
-			return time[0] * 1000 + time[1] / 1000;
-		};
-	}
-	// In a browser, use window.performance.now if it is available.
-	else if (this.window !== undefined &&
-	         window.performance !== undefined &&
+		// Convert [seconds, nanoseconds] to milliseconds.
+		return time[0] * 1000 + time[1] / 1000000;
+	};
+}
+// In a browser, use window.performance.now if it is available.
+else if (typeof (window) !== 'undefined' &&
+				 window.performance !== undefined &&
 		 window.performance.now !== undefined) {
-
-		// This must be bound, because directly assigning this function
-		// leads to an invocation exception in Chrome.
-		TWEEN.now = window.performance.now.bind(window.performance);
-	}
-	// Use Date.now if it is available.
-	else if (Date.now !== undefined) {
-		TWEEN.now = Date.now;
-	}
-	// Otherwise, use 'new Date().getTime()'.
-	else {
-		TWEEN.now = function () {
-			return new Date().getTime();
-		};
-	}
-}).bind(this)();
+	// This must be bound, because directly assigning this function
+	// leads to an invocation exception in Chrome.
+	TWEEN.now = window.performance.now.bind(window.performance);
+}
+// Use Date.now if it is available.
+else if (Date.now !== undefined) {
+	TWEEN.now = Date.now;
+}
+// Otherwise, use 'new Date().getTime()'.
+else {
+	TWEEN.now = function () {
+		return new Date().getTime();
+	};
+}
 
 
 TWEEN.Tween = function (object) {
@@ -125,18 +122,13 @@ TWEEN.Tween = function (object) {
 	var _onCompleteCallback = null;
 	var _onStopCallback = null;
 
-	// Set all starting values present on the target object
-	for (var field in object) {
-		_valuesStart[field] = parseFloat(object[field], 10);
-	}
-
 	this.to = function (properties, duration) {
+
+		_valuesEnd = properties;
 
 		if (duration !== undefined) {
 			_duration = duration;
 		}
-
-		_valuesEnd = properties;
 
 		return this;
 
@@ -169,11 +161,12 @@ TWEEN.Tween = function (object) {
 
 			// If `to()` specifies a property that doesn't exist in the source object,
 			// we should not set that property in the object
-			if (_valuesStart[property] === undefined) {
+			if (_object[property] === undefined  && propertyByPath(property, _object) === undefined) {
 				continue;
 			}
 
-			_valuesStart[property] = _object[property];
+			// Save the starting value.
+			_valuesStart[property] = _object[property] || propertyByPath(property, _object);
 
 			if ((_valuesStart[property] instanceof Array) === false) {
 				_valuesStart[property] *= 1.0; // Ensures we're using numbers, not strings
@@ -197,7 +190,7 @@ TWEEN.Tween = function (object) {
 		_isPlaying = false;
 
 		if (_onStopCallback !== null) {
-			_onStopCallback.call(_object);
+			_onStopCallback.call(_object, _object);
 		}
 
 		this.stopChainedTweens();
@@ -298,6 +291,34 @@ TWEEN.Tween = function (object) {
 
 	};
 
+	var id = function (id) {
+		return id;
+	};
+
+	var isNestedProperty = function (string) {
+		var split = string.split('.');
+
+		return split.every(id) && split.length > 1;
+	};
+
+	var propertyByPath = function (path, obj) {
+		path = path.split('.');
+		return path.reduce(function (prop, key) {
+			return prop ? prop[key] : prop;
+		}, obj);
+	};
+
+	var applyValToObjectWithPath = function (path, obj, val) {
+		path = path.split('.');
+		path.reduce(function (obj, key, i) {
+			if (i=== path.length - 1) {
+				obj[key] = val;
+			}
+
+			return obj[key];
+		}, obj);
+	};
+
 	this.update = function (time) {
 
 		var property;
@@ -311,11 +332,10 @@ TWEEN.Tween = function (object) {
 		if (_onStartCallbackFired === false) {
 
 			if (_onStartCallback !== null) {
-				_onStartCallback.call(_object);
+				_onStartCallback.call(_object, _object);
 			}
 
 			_onStartCallbackFired = true;
-
 		}
 
 		elapsed = (time - _startTime) / _duration;
@@ -326,7 +346,7 @@ TWEEN.Tween = function (object) {
 		for (property in _valuesEnd) {
 
 			// Don't update properties that do not exist in the source object
-			if (_valuesStart[property] === undefined) {
+			if (_valuesStart[property] === undefined && propertyByPath(property, _object) === undefined) {
 				continue;
 			}
 
@@ -343,15 +363,23 @@ TWEEN.Tween = function (object) {
 				if (typeof (end) === 'string') {
 
 					if (end.charAt(0) === '+' || end.charAt(0) === '-') {
-						end = start + parseFloat(end, 10);
+						end = start + parseFloat(end);
 					} else {
-						end = parseFloat(end, 10);
+						end = parseFloat(end);
 					}
 				}
 
 				// Protect against non numeric properties.
 				if (typeof (end) === 'number') {
-					_object[property] = start + (end - start) * value;
+					var val = start + (end - start) * value;
+
+					if (isNestedProperty(property)) {
+						var path = property;
+
+						applyValToObjectWithPath(path, _object, val);
+					} else {
+						_object[property] = val;
+					}
 				}
 
 			}
@@ -374,7 +402,7 @@ TWEEN.Tween = function (object) {
 				for (property in _valuesStartRepeat) {
 
 					if (typeof (_valuesEnd[property]) === 'string') {
-						_valuesStartRepeat[property] = _valuesStartRepeat[property] + parseFloat(_valuesEnd[property], 10);
+						_valuesStartRepeat[property] = _valuesStartRepeat[property] + parseFloat(_valuesEnd[property]);
 					}
 
 					if (_yoyo) {
@@ -403,7 +431,8 @@ TWEEN.Tween = function (object) {
 			} else {
 
 				if (_onCompleteCallback !== null) {
-					_onCompleteCallback.call(_object);
+
+					_onCompleteCallback.call(_object, _object);
 				}
 
 				for (var i = 0, numChainedTweens = _chainedTweens.length; i < numChainedTweens; i++) {

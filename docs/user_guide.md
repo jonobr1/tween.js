@@ -297,17 +297,25 @@ Executed right before the tween starts--i.e. before the deltas are calculated. T
 
 It is great for synchronising to other events or triggering actions you want to happen when a tween starts.
 
+The tweened object is passed in as the first parameter. It may also be accessed using the `this` value.
+
 ### onStop
 
 Executed when a tween is explicitly stopped via `stop()`, but not when it is completed normally, and before stopping any possible chained tween.
+
+The tweened object is passed in as the first parameter. It may also be accessed using the `this` value.
 
 ### onUpdate
 
 Executed each time the tween is updated, after the values have been actually updated.
 
+The tweened object may be accessed using the `this` value. The first parameter passed to the callback is the tween's progress, represented as a value from 0 to 1. However, this may change in future releases. You are advised not to rely on this value.
+
 ### onComplete
 
 Executed when a tween is finished normally (i.e. not stopped).
+
+The tweened object is passed in as the first parameter. It may also be accessed using the `this` value.
 
 ## Advanced tweening
 
@@ -356,7 +364,7 @@ The way these values are calculated is as follows:
 * the progress (from 0 to 1) is used as input for the interpolation function
 * based on the progress and the array of values, an interpolated value is generated
 
-For example, when the tween has just started (progress is 0), the interpolation function will return the first value in the array. When the tween is halfway, the interpolation function will return a value approximately in the middle of the array, and when the tween is at the end, the interpolation function will return the last value. 
+For example, when the tween has just started (progress is 0), the interpolation function will return the first value in the array. When the tween is halfway, the interpolation function will return a value approximately in the middle of the array, and when the tween is at the end, the interpolation function will return the last value.
 
 You can change the interpolation function with the `interpolation` method. For example:
 
@@ -375,6 +383,16 @@ The default is `Linear`.
 Note that the interpolation function is global to all properties that are tweened with arrays in the same tween. You can't make property A change with an array and a Linear function, and property B with an array too and a Bezier function using the same tween; you should use two tween objects running over the same object but modifying different properties and using different interpolation functions.
 
 Check [06_array_interpolation](../examples/06_array_interpolation.html) for an example.
+
+### Tweening nested object
+
+Tween.js can also change properties across nested object, to do this you just need to use a string path pointing to the properties. For example:
+
+```javascript
+var nestedObject = { scale: { x:0, y:0 } }
+
+var tween = new TWEEN.Tween(nestedObject).to({ 'scale.x': 100, 'scale.y': 100 });
+```
 
 ## Getting the best performance
 
